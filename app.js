@@ -5,10 +5,11 @@ const bodyParser= require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 // const encrypt = require("mongoose-encryption");
-const md5 = require("md5");
-
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 const app = express();
 //------------------------
+
 
 mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 const userSchema = new mongoose.Schema ({
@@ -43,10 +44,15 @@ app.get("/register", function (req, res) {
 });
 
 app.post("/register", function (req, res) {
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+    // Store hash in your password DB.
+    user = new User({email:req.body.username, password:hash});
+    user.save().then( () => res.render("secrets")
+    );
 
-   user = new User({email:req.body.username, password:md5(req.body.password)});
-   user.save().then( () => res.render("secrets")
-   );
+
+    });
+
 
 });
 
@@ -55,12 +61,15 @@ app.post("/login", function (req, res) {
    User.findOne({email:req.body.username}).then( (data) => {
 
      if (data) {
-                       if (data.password === md5(req.body.password)) {
+       bcrypt.compare(req.body.password, data.password, function(err, result) {
+// result == true
+                      if (result == true) {
                          res.render("secrets");
                        } else {
                          res.redirect("/login");
                        }
-                }
+              });    
+            }
    });
 
 });
