@@ -1,39 +1,43 @@
 //jshint esversion:6
 require("dotenv").config();
 const express = require("express");
-const bodyParser= require("body-parser");
+const bodyParser = require("body-parser");
 const ejs = require("ejs");
-const mongoose = require("mongoose");
-// const encrypt = require("mongoose-encryption");
-const bcrypt = require("bcrypt");
-const saltRounds = 10;
+
+
+
+const session = require("express-session");
+const passport = require("passport");
+const passport2 = require("./passport2.js");
+
 const app = express();
-//------------------------
-
-
-mongoose.connect("mongodb://127.0.0.1:27017/userDB");
-const userSchema = new mongoose.Schema ({
-  email:String,
-  password: String
-});
-//
-// const secret = process.env.SECRET;
-// userSchema.plugin(encrypt, {secret:secret, encryptedFields: ['password']});
-
-const User = mongoose.model("User", userSchema);
-
 
 //-------------------------------------------------
 app.use(express.static("public"));
-app.set('view engine', 'ejs');
-app.use(bodyParser.urlencoded({extended:true}));
+app.set("view engine", "ejs");
+app.use(bodyParser.urlencoded({ extended: true }));
+
+
+app.use(
+  session({
+    secret: process.env.SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false },
+  })
+);
+app.use(passport.initialize());
+app.use(passport.session());
+
+//------------------------
+const User = require("./user").User;         // importing user model
+passport2.PSD();                              // importing passport configuration
 
 // ------------------------------------------------------
 
 app.get("/", function (req, res) {
   res.render("home");
 });
-
 
 app.get("/login", function (req, res) {
   res.render("login");
@@ -43,37 +47,35 @@ app.get("/register", function (req, res) {
   res.render("register");
 });
 
-app.post("/register", function (req, res) {
-  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
-    // Store hash in your password DB.
-    user = new User({email:req.body.username, password:hash});
-    user.save().then( () => res.render("secrets")
-    );
-
-
-    });
-
-
+app.get("/secrets", function (req, res) {
+  if (req.isAuthenticated()) {
+    res.render("secrets");
+  } else {
+    res.redirect("/");
+  }
 });
 
-app.post("/login", function (req, res) {
 
-   User.findOne({email:req.body.username}).then( (data) => {
+// Define the registration route
+app.post("/register",(req, res) => {
+  const { username, password } = req.body;
 
-     if (data) {
-       bcrypt.compare(req.body.password, data.password, function(err, result) {
-// result == true
-                      if (result == true) {
-                         res.render("secrets");
-                       } else {
-                         res.redirect("/login");
-                       }
-              });    
-            }
-   });
+  // Create a new user
+  User.register(new User({ username }), password, (err) => {
+    if (err) {
+      console.error(err);
+      res.redirect("/register");
+    } else {
+      passport.authenticate("local")(req, res, function () {
+        res.redirect("/secrets");
+      });
+    }});
+  });
 
+app.post("/login", passport.authenticate("local", {failureRedirect: "/login"}), (req, res) => {
+  res.redirect("/secrets");
+  console.log("sent to secrets page" + req);
 });
-
 
 
 // -----------------------------------------------------------
